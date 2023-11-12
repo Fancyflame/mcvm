@@ -1,0 +1,20 @@
+<type>          ::= bool | int
+<binop>         ::= + | - | * | / | % | "||" | && | == | != | > | < | >= | <=
+<func call>     ::= <ident>($(<string>) *)
+<expr>          ::= <number> | true | false | !<expr> | <expr> <binop> <expr> | <call>
+<if>            ::= if <expr> <block> $(else if <expr> <block>)* <|else <block>>
+<for>           ::= for <ident> in <|<expr>>..<|<expr>> <block>
+<while>         ::= while <expr> <block>
+<do while>      ::= do <expr> <block> while <expr>;
+<loop>          ::= loop <block>
+<stmt>          ::= <<var> | <static var> | <assign> | <expr> | break | continue
+                    | return <expr>> | <if> | <for> | <while> | <do while> | <loop>
+                    | <static var> | <const expr>;
+<var>           ::= let <ident> = <expr>;
+<assign op>     ::= += | -= | *= | /= | =
+<assign>        ::= <ident> <assign op> <expr>;
+<static var>    ::= static <ident> = <expr>;
+<const expr>    ::= const <ident> = <expr>;
+<block>         ::= { $(<stmt>)* }
+<define func>   ::= fn <ident>($(<ident>: <type>),*) -> <type> <block>
+<item>          ::= <define func> | <static var> | <static var> | <const expr>

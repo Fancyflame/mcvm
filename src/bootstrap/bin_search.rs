@@ -2,7 +2,7 @@ use std::{fs, path::Path};
 
 use anyhow::{anyhow, Result};
 
-use crate::PREFIX;
+use super::PREFIX;
 
 pub fn gen_bin_search<F>(func_path: &Path, cmd_name: &str, size: u32, generate: F) -> Result<()>
 where

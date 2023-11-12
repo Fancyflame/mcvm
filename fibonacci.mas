@@ -1,0 +1,42 @@
+# [return data][arg0, arg1, ...][data]
+
+fab_entry:
+load     L0 1           # load arg0 to L0
+set      L1 0           # set 0 to L1
+cmp =
+bi push1
+bn fab_1
+
+push1:
+set      L0 1
+store    L0 0
+
+fab_1:
+load     L0 1
+set      L1 1
+cmp =
+bi push1
+bn fab_2
+
+fab_2:
+load     L0 1           # ret arg0 ret2 arg00
+set      L1 -1
+add
+store    L0 3
+call     2 fab_entry    # recursive call
+                        # ret arg0 add1 ret2 arg00
+load     L0 1
+set      L1 -2
+add
+store    L0 4
+call     3 fab_entry    # recursive call
+                        # ret arg0 add1 add2
+load     L0 2
+load     L1 3
+add
+store    L0 0
+
+__main__:
+set      L0 10
+store    L0 1
+call     0 fab_entry
