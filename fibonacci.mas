@@ -1,42 +1,42 @@
 # [return data][arg0, arg1, ...][data]
 
 fab_entry:
-load     L0 1           # load arg0 to L0
-set      L1 0           # set 0 to L1
-cmp =
-bi push1
+load     1              # load arg0 to L0
+cmpin    0              # if arg0 == 0
+bi push1                # jumps to push1
 bn fab_1
 
 push1:
 set      L0 1
-store    L0 0
+store    0
+# set    L0 1           # optimized out
 
 fab_1:
-load     L0 1
-set      L1 1
-cmp =
+load     1
+cmpin    1
 bi push1
 bn fab_2
 
 fab_2:
-load     L0 1           # ret arg0 ret2 arg00
+load     1              # ret arg0 ret2 arg00
 set      L1 -1
-add
-store    L0 3
+calc     +
+store    3
 call     2 fab_entry    # recursive call
-                        # ret arg0 add1 ret2 arg00
-load     L0 1
+                        # ret arg0 ret1 arg10
+load     1
 set      L1 -2
-add
-store    L0 4
+calc     +
+store    4
 call     3 fab_entry    # recursive call
-                        # ret arg0 add1 add2
-load     L0 2
-load     L1 3
-add
-store    L0 0
+                        # ret arg0 add1 ret2 arg20
+load     2
+mov      L1 L0
+load     3
+calc     +
+store    0
 
 __main__:
-set      L0 10
-store    L0 1
+set      L0 8
+store    1
 call     0 fab_entry

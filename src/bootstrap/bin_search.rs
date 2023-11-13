@@ -2,7 +2,7 @@ use std::{fs, path::Path};
 
 use anyhow::{anyhow, Result};
 
-use super::PREFIX;
+use super::{MEM_POINTER, PREFIX};
 
 pub fn gen_bin_search<F>(func_path: &Path, cmd_name: &str, size: u32, generate: F) -> Result<()>
 where
@@ -44,8 +44,8 @@ where
 
         let upper_bound = size - 1;
         format!(
-            "execute if score {PREFIX} {PREFIX}_Ptr matches {size}.. run {err_msg}\n\
-            execute if score {PREFIX} {PREFIX}_Ptr matches ..{upper_bound} run function {entry_fn}"
+            "execute if score {PREFIX} {MEM_POINTER} matches {size}.. run {err_msg}\n\
+            execute if score {PREFIX} {MEM_POINTER} matches ..{upper_bound} run function {entry_fn}"
         )
     };
 
@@ -74,8 +74,8 @@ where
         let lower = nth & u32::MAX << 1;
 
         format!(
-            "execute if score {PREFIX} {PREFIX}_Ptr matches {nth} run function {}\n\
-            execute if score {PREFIX} {PREFIX}_Ptr matches {lower} run function {}",
+            "execute if score {PREFIX} {MEM_POINTER} matches {nth} run {}\n\
+            execute if score {PREFIX} {MEM_POINTER} matches {lower} run {}",
             generate(nth),
             generate(lower)
         )
@@ -92,8 +92,8 @@ where
 
         format!(
             "\
-            execute if score {PREFIX} {PREFIX}_Ptr matches {nth}.. run function {}\n\
-            execute if score {PREFIX} {PREFIX}_Ptr matches ..{upper_bound} run function {}\
+            execute if score {PREFIX} {MEM_POINTER} matches {nth}.. run function {}\n\
+            execute if score {PREFIX} {MEM_POINTER} matches ..{upper_bound} run function {}\
         ",
             bin_search_fn_name(id, higher),
             bin_search_fn_name(id, lower)

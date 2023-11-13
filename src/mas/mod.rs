@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+mod generate;
 mod parse;
 
 #[derive(Debug)]
@@ -25,35 +26,37 @@ pub enum CmpOp {
 }
 
 #[derive(Clone, Copy, Debug)]
+pub enum CalcOp {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Rem,
+    Min,
+    Max,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum ExprCmpIn {
+    Value(i32),
+    Range(Option<i32>, Option<i32>),
+}
+
+#[derive(Clone, Copy, Debug)]
 pub enum Instruction<'a> {
     RawCommand(&'a str),
-    Copy {
-        dst: Register,
-        src: Register,
-    },
-    Set {
-        dst: Register,
-        value: i32,
-    },
-    Load {
-        dst: Register,
-        addr: i32,
-    },
-    Store {
-        dst: Register,
-        addr: i32,
-    },
+    Debug { line: usize, info: &'a str },
+    Log(&'a str),
+    Move { dst: Register, src: Register },
+    Set { dst: Register, value: i32 },
+    Load { addr: i32 },
+    Store { addr: i32 },
     Compare(CmpOp),
-    CompareIn {
-        lower_bound: Option<i32>,
-        upper_bound: Option<i32>,
-    },
+    CompareIn(ExprCmpIn),
     Branch(&'a str),
     BranchIf(&'a str),
     BranchIfNot(&'a str),
-    Add,
-    Call {
-        offset_inc: i32,
-        label: &'a str,
-    },
+    Calculate(CalcOp),
+    Random { min: i32, max: i32 },
+    Call { offset_inc: i32, label: &'a str },
 }

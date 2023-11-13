@@ -1,19 +1,23 @@
 <label>         ::= <ident>:
 <addr>          ::= <int>|=<ident>
-<operator>      ::= "<" | ">" | "<=" | ">=" | =
-<range>         ::= <|lb:int>..<|hb:int>
+<cmp-op>        ::= "<" | ">" | "<=" | ">=" | =
+<calc-op>       ::= + | - | * | / | % | < | >
+<range>         ::= <|lb:int>..<|hb:int> | <int>
 <reg>           ::= L0|L1|L2|L3
 <alias>         ::= <ident>=<int>
 
 <raw-command>   ::= cmd <string>
-<copy>          ::= copy <dst:reg> <src:reg>
+<move>          ::= mov <dst:reg> <src:reg>
 <set>           ::= set <reg> <int>
-<load>          ::= load <reg> <addr>
-<store>         ::= store <reg> <addr>
-<cmp>           ::= cmp <operator>
+<load>          ::= load <addr>
+<store>         ::= store <addr>
+<cmp>           ::= cmp <cmp-op>
 <cmp-in>        ::= cmpin <range>
 <branch>        ::= b <label:ident>
 <branch-if>     ::= bi <label:ident>
 <branch-if-not> ::= bn <label:ident>
-<add>           ::= add
+<calculate>     ::= calc <compute-op>
+<random>        ::= rand <min:int> <max:int>
 <call>          ::= call <int> <label>
+<debug>         ::= debug <string>
+<log>           ::= log <string>

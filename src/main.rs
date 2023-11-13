@@ -9,12 +9,6 @@ mod mas;
 mod parse;
 
 fn main() -> Result<()> {
-    let codes = fs::read_to_string("fibonacci.mas").unwrap();
-    dbg!(VirtualMachine::parse(&codes).unwrap());
-    Ok(())
-}
-
-fn _main() -> Result<()> {
     let mut args = env::args();
 
     let mut function_dir = PathBuf::from(
@@ -23,14 +17,16 @@ fn _main() -> Result<()> {
     );
     function_dir.push("functions");
 
-    if !function_dir.exists() {
-        fs::create_dir(&function_dir)?;
+    if function_dir.exists() {
+        fs::remove_dir_all(&function_dir)?;
     }
+    fs::create_dir(&function_dir)?;
 
     let size: u32 = match env::var("MCVM_MEM_SIZE") {
         Ok(s) => s.parse()?,
-        Err(_) => 128,
+        Err(_) => 64,
     };
 
-    generate_module_memory(&function_dir, size)
+    generate_module_memory(&function_dir, size)?;
+    VirtualMachine::parse(&fs::read_to_string("fibonacci.mas")?)?.generate(&function_dir)
 }

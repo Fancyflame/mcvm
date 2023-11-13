@@ -12,7 +12,7 @@ use nom::{
     IResult, InputTakeAtPosition, Parser,
 };
 
-use super::{CmpOp, Instruction, Register, VirtualMachine};
+use super::{CalcOp, CmpOp, ExprCmpIn, Instruction, Register, VirtualMachine};
 
 impl<'a> VirtualMachine<'a> {
     pub fn parse(text: &'a str) -> Result<Self> {
@@ -24,8 +24,11 @@ impl<'a> VirtualMachine<'a> {
                 continue;
             }
 
-            let (_, (loi, ())) = pair(alt((parse_label, parse_instruction)), comment)(line)
-                .map_err(|e| anyhow!("cannot parse code at line {}: {e}", line_index + 1))?;
+            let line_number = line_index + 1;
+
+            let (_, (loi, ())) =
+                pair(alt((parse_label, parse_instruction(line_number))), comment)(line)
+                    .map_err(|e| anyhow!("cannot parse code at line {line_number}: {e}"))?;
 
             match loi {
                 LabelOrInst::Label(label) => {
@@ -60,36 +63,35 @@ fn parse_label(input: &str) -> IResult<&str, LabelOrInst> {
     })(input)
 }
 
-fn parse_instruction(input: &str) -> IResult<&str, LabelOrInst> {
+fn parse_instruction<'a>(
+    line_number: usize,
+) -> impl FnMut(&'a str) -> IResult<&'a str, LabelOrInst> {
     let cmd = command_format("cmd", (ls(expr_str),), |(cmd,)| {
         Instruction::RawCommand(cmd)
     });
 
-    let copy = command_format("copy", (ls(register), ls(register)), |(dst, src)| {
-        Instruction::Copy { dst, src }
+    let mov = command_format("mov", (ls(register), ls(register)), |(dst, src)| {
+        Instruction::Move { dst, src }
     });
 
     let set = command_format("set", (ls(register), ls(parse_i32)), |(dst, value)| {
         Instruction::Set { dst, value }
     });
 
-    let load = command_format("load", (ls(register), ls(parse_i32)), |(dst, addr)| {
-        Instruction::Load { dst, addr }
+    let load = command_format("load", (ls(parse_i32),), |(addr,)| Instruction::Load {
+        addr,
     });
 
-    let store = command_format("store", (ls(register), ls(parse_i32)), |(dst, addr)| {
-        Instruction::Store { dst, addr }
+    let store = command_format("store", (ls(parse_i32),), |(addr,)| Instruction::Store {
+        addr,
     });
 
-    let cmp = command_format("cmp", (ls(operator),), |(operator,)| {
+    let cmp = command_format("cmp", (ls(cmp_operator),), |(operator,)| {
         Instruction::Compare(operator)
     });
 
-    let cmpin = command_format("cmpin", (ls(range),), |((lower_bound, upper_bound),)| {
-        Instruction::CompareIn {
-            lower_bound,
-            upper_bound,
-        }
+    let cmpin = command_format("cmpin", (ls(cmp_in),), |(expr,)| {
+        Instruction::CompareIn(expr)
     });
 
     let b = command_format("b", (ls(label),), |(label,)| Instruction::Branch(label));
@@ -100,21 +102,36 @@ fn parse_instruction(input: &str) -> IResult<&str, LabelOrInst> {
         Instruction::BranchIfNot(label)
     });
 
-    let add = command_format("add", (), |()| Instruction::Add);
+    let calc = command_format("calc", (ls(calc_operator),), |(opr,)| {
+        Instruction::Calculate(opr)
+    });
+
+    let rand = command_format("rand", (ls(parse_i32), ls(parse_i32)), |(min, max)| {
+        Instruction::Random { min, max }
+    });
 
     let call = command_format("call", (ls(parse_i32), ls(label)), |(offset_inc, label)| {
         Instruction::Call { offset_inc, label }
     });
 
+    let debug = command_format("debug", (ls(expr_str),), move |(info,)| {
+        Instruction::Debug {
+            line: line_number,
+            info,
+        }
+    });
+
+    let log = command_format("log", (ls(expr_str),), |(msg,)| Instruction::Log(msg));
+
     map(
         terminated(
             alt((
-                cmd, copy, set, load, store, cmp, cmpin, b, bi, bn, add, call,
+                cmd, mov, set, load, store, cmp, cmpin, b, bi, bn, calc, rand, call, debug, log,
             )),
             comment,
         ),
         LabelOrInst::Instruction,
-    )(input)
+    )
 }
 
 fn command_format<'a, P, O, F>(
@@ -180,7 +197,7 @@ fn register(input: &str) -> IResult<&str, Register> {
     ))(input)
 }
 
-fn operator(input: &str) -> IResult<&str, CmpOp> {
+fn cmp_operator(input: &str) -> IResult<&str, CmpOp> {
     alt((
         value(CmpOp::Equals, tag("=")),
         value(CmpOp::GreaterEq, tag(">=")),
@@ -190,6 +207,24 @@ fn operator(input: &str) -> IResult<&str, CmpOp> {
     ))(input)
 }
 
-fn range(input: &str) -> IResult<&str, (Option<i32>, Option<i32>)> {
-    separated_pair(opt(parse_i32), tag(".."), opt(parse_i32))(input)
+fn calc_operator(input: &str) -> IResult<&str, CalcOp> {
+    alt((
+        value(CalcOp::Add, tag("+")),
+        value(CalcOp::Sub, tag("-")),
+        value(CalcOp::Mul, tag("*")),
+        value(CalcOp::Div, tag("/")),
+        value(CalcOp::Rem, tag("%")),
+        value(CalcOp::Min, tag("<")),
+        value(CalcOp::Max, tag(">")),
+    ))(input)
+}
+
+fn cmp_in(input: &str) -> IResult<&str, ExprCmpIn> {
+    alt((
+        map(
+            separated_pair(opt(parse_i32), tag(".."), opt(parse_i32)),
+            |(lb, ub)| ExprCmpIn::Range(lb, ub),
+        ),
+        map(parse_i32, |val| ExprCmpIn::Value(val)),
+    ))(input)
 }
