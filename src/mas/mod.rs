@@ -10,10 +10,10 @@ pub struct VirtualMachine<'a> {
 
 #[derive(Clone, Copy, Debug)]
 pub enum Register {
-    L0,
-    L1,
-    L2,
-    L3,
+    R0,
+    R1,
+    R2,
+    R3,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -23,6 +23,7 @@ pub enum CmpOp {
     LessEq,
     GreaterEq,
     Equals,
+    NotEquals,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -52,7 +53,7 @@ pub enum Instruction<'a> {
     Load { addr: i32 },
     Store { addr: i32 },
     Compare(CmpOp),
-    CompareIn(ExprCmpIn),
+    CompareIn { not: bool, opr: ExprCmpIn },
     Branch(&'a str),
     BranchIf(&'a str),
     BranchIfNot(&'a str),

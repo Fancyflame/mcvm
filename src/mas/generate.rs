@@ -4,7 +4,7 @@ use anyhow::Result;
 
 use crate::{
     bootstrap::{
-        FUNC_LOAD, FUNC_STORE, MEM_OFFSET, MEM_POINTER, PREFIX, REG_L0, REG_L1, REG_L2, REG_L3,
+        FUNC_LOAD, FUNC_STORE, MEM_OFFSET, MEM_POINTER, PREFIX, REG_R0, REG_R1, REG_R2, REG_R3,
     },
     mas::{CalcOp, ExprCmpIn},
 };
@@ -44,10 +44,10 @@ fn mangle_label() -> impl Fn(&str) -> String {
 
 fn register(reg: Register) -> &'static str {
     match reg {
-        Register::L0 => REG_L0,
-        Register::L1 => REG_L1,
-        Register::L2 => REG_L2,
-        Register::L3 => REG_L3,
+        Register::R0 => REG_R0,
+        Register::R1 => REG_R1,
+        Register::R2 => REG_R2,
+        Register::R3 => REG_R3,
     }
 }
 
@@ -63,12 +63,12 @@ where
         Instruction::Branch(b) => format!("function {}", mangler(b)),
 
         Instruction::BranchIf(bi) => format!(
-            "execute unless score {PREFIX} {REG_L0} matches 0 run function {}\n",
+            "execute unless score {PREFIX} {REG_R0} matches 0 run function {}\n",
             mangler(bi)
         ),
 
         Instruction::BranchIfNot(bn) => format!(
-            "execute if score {PREFIX} {REG_L0} matches 0 run function {}\n",
+            "execute if score {PREFIX} {REG_R0} matches 0 run function {}\n",
             mangler(bn)
         ),
 
@@ -83,23 +83,27 @@ where
                 CalcOp::Max => ">",
             };
 
-            format!("scoreboard players operation {PREFIX} {REG_L0} {opr_str} {PREFIX} {REG_L1}\n")
+            format!("scoreboard players operation {PREFIX} {REG_R0} {opr_str} {PREFIX} {REG_R1}\n")
         }
 
         Instruction::Call { offset_inc, label } => {
             let function = mangler(label);
             format!(
-                "\
-                scoreboard players add {PREFIX} {MEM_OFFSET} {offset_inc}\n\
+                "scoreboard players add {PREFIX} {MEM_OFFSET} {offset_inc}\n\
                 function {function}\n\
-                scoreboard players add {PREFIX} {MEM_OFFSET} -{offset_inc}\n\
-            "
+                scoreboard players add {PREFIX} {MEM_OFFSET} -{offset_inc}\n"
             )
         }
 
         Instruction::Compare(opr) => {
+            let mut if_ = "if";
+
             let opr_str = match opr {
                 CmpOp::Equals => "=",
+                CmpOp::NotEquals => {
+                    if_ = "unless";
+                    "="
+                }
                 CmpOp::GreaterEq => ">=",
                 CmpOp::GreaterThan => ">",
                 CmpOp::LessEq => "<=",
@@ -107,12 +111,14 @@ where
             };
 
             format!("\
-                execute if score {PREFIX} {REG_L0} {opr_str} {PREFIX} {REG_L1} run scoreboard players set {PREFIX} {REG_L0} 1\n\
-                execute unless score {PREFIX} {REG_L0} matches 1 run scoreboard players set {PREFIX} {REG_L0} 0\n\
+                execute {if_} score {PREFIX} {REG_R0} {opr_str} {PREFIX} {REG_R1} run scoreboard players set {PREFIX} {REG_R0} 1\n\
+                execute unless score {PREFIX} {REG_R0} matches 1 run scoreboard players set {PREFIX} {REG_R0} 0\n\
             ")
         }
 
-        Instruction::CompareIn(expr) => {
+        Instruction::CompareIn { not, opr: expr } => {
+            let if_ = if not { "unless" } else { "if" };
+
             let matches = match expr {
                 ExprCmpIn::Value(v) => v.to_string(),
                 ExprCmpIn::Range(lb, ub) => format!(
@@ -123,8 +129,8 @@ where
             };
 
             format!("\
-                execute if score {PREFIX} {REG_L0} matches {matches} run scoreboard players set {PREFIX} {REG_L0} 1\n\
-                execute unless score {PREFIX} {REG_L0} matches 1 run scoreboard players set {PREFIX} {REG_L0} 0\n\
+                execute {if_} score {PREFIX} {REG_R0} matches {matches} run scoreboard players set {PREFIX} {REG_R0} 1\n\
+                execute unless score {PREFIX} {REG_R0} matches 1 run scoreboard players set {PREFIX} {REG_R0} 0\n\
             ")
         }
 
@@ -147,7 +153,7 @@ where
         }
 
         Instruction::Random { min, max } => {
-            format!("scoreboard players random {PREFIX} {REG_L0} {min} {max}\n")
+            format!("scoreboard players random {PREFIX} {REG_R0} {min} {max}\n")
         }
 
         Instruction::RawCommand(cmd) => {
@@ -163,11 +169,9 @@ where
 
         Instruction::Store { addr } => {
             format!(
-                "\
-                scoreboard players set {PREFIX} {MEM_POINTER} {addr}\n\
+                "scoreboard players set {PREFIX} {MEM_POINTER} {addr}\n\
                 scoreboard players operation {PREFIX} {MEM_POINTER} += {PREFIX} {MEM_OFFSET}\n\
-                function {FUNC_STORE}\n\
-            "
+                function {FUNC_STORE}\n"
             )
         }
 

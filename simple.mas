@@ -1,15 +1,15 @@
 __main__:
-set    L0 10
+set    R0 10
 store  1
 call   2 func1
 load   1
-mov    L1 L0
+mov    R1 R0
 load   2
 calc   +
 store  0
 
 func1:
-set    L0 69
+set    R0 69
 cmpin  69
 bi     set80
 bn     set55
@@ -18,7 +18,7 @@ store  0
 
 set80:
 log    "set 80"
-set    L0 80
+set    R0 80
 
 set55:
-set    L0 55
+set    R0 55

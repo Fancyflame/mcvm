@@ -90,8 +90,11 @@ fn parse_instruction<'a>(
         Instruction::Compare(operator)
     });
 
-    let cmpin = command_format("cmpin", (ls(cmp_in),), |(expr,)| {
-        Instruction::CompareIn(expr)
+    let cmpin = command_format("cmpin", (opt(ls(tag("not"))), ls(cmp_in)), |(not, expr)| {
+        Instruction::CompareIn {
+            not: not.is_some(),
+            opr: expr,
+        }
     });
 
     let b = command_format("b", (ls(label),), |(label,)| Instruction::Branch(label));
@@ -190,16 +193,17 @@ fn expr_str(input: &str) -> IResult<&str, &str> {
 
 fn register(input: &str) -> IResult<&str, Register> {
     alt((
-        value(Register::L0, tag("L0")),
-        value(Register::L1, tag("L1")),
-        value(Register::L2, tag("L2")),
-        value(Register::L3, tag("L3")),
+        value(Register::R0, tag("R0")),
+        value(Register::R1, tag("R1")),
+        value(Register::R2, tag("R2")),
+        value(Register::R3, tag("R3")),
     ))(input)
 }
 
 fn cmp_operator(input: &str) -> IResult<&str, CmpOp> {
     alt((
-        value(CmpOp::Equals, tag("=")),
+        value(CmpOp::Equals, tag("==")),
+        value(CmpOp::NotEquals, tag("!=")),
         value(CmpOp::GreaterEq, tag(">=")),
         value(CmpOp::GreaterThan, tag(">")),
         value(CmpOp::LessEq, tag("<=")),

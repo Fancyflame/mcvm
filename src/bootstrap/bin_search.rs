@@ -18,16 +18,14 @@ where
         return Err(anyhow!("memory size must be power of 2"));
     }
 
-    let id = format!("{PREFIX}_bin_search_{cmd_name}");
-
-    let dir = func_path.join(&id);
+    let dir = func_path.join(cmd_name);
     if dir.exists() {
         fs::remove_dir_all(&dir)?;
     }
     fs::create_dir(&dir)?;
 
     for nth in 0..size {
-        bin_search(func_path, &id, nth, &generate)?;
+        bin_search(func_path, cmd_name, nth, &generate)?;
     }
 
     let err_msg = "say mcvm fatal error: \
@@ -39,7 +37,7 @@ where
         let entry_fn = if size == 1 {
             generate(0)
         } else {
-            bin_search_fn_name(&id, size >> 1)
+            bin_search_fn_name(&cmd_name, size >> 1)
         };
 
         let upper_bound = size - 1;
@@ -105,17 +103,3 @@ where
         content,
     )
 }
-
-/*fn nth_unit_fn_name(id: &str, nth: u32) -> String {
-    format!("{id}/N{nth}")
-}
-
-fn nth_unit<F>(func_path: &Path, id: &str, nth: u32, generate: F) -> std::io::Result<()>
-where
-    F: Fn(u32) -> String,
-{
-    fs::write(
-        func_path.join(format!("{}.mcfunction", nth_unit_fn_name(id, nth))),
-        generate(nth),
-    )
-}*/
