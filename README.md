@@ -14,7 +14,7 @@ MCVM只保证在Bedrock版本运行。
 目前没有提供编译后可执行程序，您需要先[安装Rust](https://www.rust-lang.org/zh-CN/tools/install)来编译MCVM。
 
 ```
-cargo r path/to/behavior_pack
+cargo r path/to/input/file path/to/output/behavior_pack/root/folder
 ```
 
 该指令会在当前文件夹下新建`functions`文件夹，并在内生成mcfunction文件。您需要自己新建`manifest.json`以在游戏内访问。
@@ -76,7 +76,7 @@ cargo r path/to/behavior_pack
 <branch>        ::= b <label:ident>
 <branch-if>     ::= bi <label:ident>
 <branch-if-not> ::= bn <label:ident>
-<calculate>     ::= calc <compute-op>
+<calculate>     ::= calc <calc-op>
 <random>        ::= rand <min:int> <max:int>
 <call>          ::= call <int> <label>
 <debug>         ::= debug <string>
