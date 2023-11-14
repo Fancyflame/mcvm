@@ -152,8 +152,11 @@ where
             )
         }
 
-        Instruction::Random { min, max } => {
-            format!("scoreboard players random {PREFIX} {REG_R0} {min} {max}\n")
+        Instruction::Random { dst, min, max } => {
+            format!(
+                "scoreboard players random {PREFIX} {} {min} {max}\n",
+                register(dst)
+            )
         }
 
         Instruction::RawCommand(cmd) => {

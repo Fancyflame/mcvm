@@ -109,9 +109,11 @@ fn parse_instruction<'a>(
         Instruction::Calculate(opr)
     });
 
-    let rand = command_format("rand", (ls(parse_i32), ls(parse_i32)), |(min, max)| {
-        Instruction::Random { min, max }
-    });
+    let rand = command_format(
+        "rand",
+        (ls(register), ls(parse_i32), ls(parse_i32)),
+        |(dst, min, max)| Instruction::Random { dst, min, max },
+    );
 
     let call = command_format("call", (ls(parse_i32), ls(label)), |(offset_inc, label)| {
         Instruction::Call { offset_inc, label }

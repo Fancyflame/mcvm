@@ -58,6 +58,6 @@ pub enum Instruction<'a> {
     BranchIf(&'a str),
     BranchIfNot(&'a str),
     Calculate(CalcOp),
-    Random { min: i32, max: i32 },
+    Random { dst: Register, min: i32, max: i32 },
     Call { offset_inc: i32, label: &'a str },
 }

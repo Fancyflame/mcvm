@@ -16,7 +16,7 @@
 <branch-if>     ::= bi <label:ident>
 <branch-if-not> ::= bn <label:ident>
 <calculate>     ::= calc <calc-op>
-<random>        ::= rand <min:int> <max:int>
+<random>        ::= rand <dst:reg> <min:int> <max:int>
 <call>          ::= call <int> <label>
 <debug>         ::= debug <string>
 <log>           ::= log <string>
