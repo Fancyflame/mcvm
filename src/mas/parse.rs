@@ -7,16 +7,16 @@ use nom::{
     character::complete::{i32 as parse_i32, space0, space1},
     combinator::{eof, map, opt, rest, value},
     error::{Error, ErrorKind},
-    multi::fold_many0,
+    multi::{fold_many0, separated_list0},
     sequence::{delimited, pair, preceded, separated_pair, terminated, tuple, Tuple},
     IResult, InputTakeAtPosition, Parser,
 };
 
-use super::{CalcOp, CmpOp, ExprCmpIn, Instruction, Register, VirtualMachine};
+use super::{CalcOp, CmpOp, ExprCmpIn, Function, Instruction, Register, VirtualMachine};
 
 impl<'a> VirtualMachine<'a> {
     pub fn parse(text: &'a str) -> Result<Self> {
-        let mut blocks: HashMap<&'a str, Vec<Instruction<'a>>> = HashMap::new();
+        let mut blocks: HashMap<&str, Function> = HashMap::new();
         let mut current_label = None;
 
         for (line_index, line) in text.lines().enumerate() {
@@ -26,19 +26,24 @@ impl<'a> VirtualMachine<'a> {
 
             let line_number = line_index + 1;
 
-            let (_, (loi, ())) =
-                pair(alt((parse_label, parse_instruction(line_number))), comment)(line)
-                    .map_err(|e| anyhow!("cannot parse code at line {line_number}: {e}"))?;
+            let (_, (loi, ())) = pair(
+                alt((parse_func_sig, parse_instruction(line_number))),
+                comment,
+            )(line)
+            .map_err(|e| anyhow!("cannot parse code at line {line_number}: {e}"))?;
 
             match loi {
-                LabelOrInst::Label(label) => {
-                    current_label = Some(match blocks.entry(label) {
-                        Entry::Occupied(_) => return Err(anyhow!("duplicated label `{label}`")),
-                        Entry::Vacant(vac) => vac.insert(Vec::new()),
+                FuncOrInst::Function(func) => {
+                    current_label = Some(match blocks.entry(func.name) {
+                        Entry::Occupied(_) => {
+                            return Err(anyhow!("duplicated function `{}`", func.name))
+                        }
+                        Entry::Vacant(vac) => vac.insert(func),
                     });
                 }
-                LabelOrInst::Instruction(inst) => match &mut current_label {
-                    Some(list) => list.push(inst),
+
+                FuncOrInst::Instruction(inst) => match &mut current_label {
+                    Some(func) => func.instructions.push(inst),
                     None => {
                         return Err(anyhow!(
                             "instructions must under a label, you need to define a label first"
@@ -52,20 +57,40 @@ impl<'a> VirtualMachine<'a> {
     }
 }
 
-enum LabelOrInst<'a> {
-    Label(&'a str),
+enum FuncOrInst<'a> {
+    Function(Function<'a>),
     Instruction(Instruction<'a>),
 }
 
-fn parse_label(input: &str) -> IResult<&str, LabelOrInst> {
-    map(preceded(space0, pair(label, tag(":"))), |(label, _)| {
-        LabelOrInst::Label(label)
-    })(input)
+fn parse_func_sig(input: &str) -> IResult<&str, FuncOrInst> {
+    map(
+        preceded(
+            space0,
+            terminated(
+                pair(
+                    ident,
+                    delimited(
+                        pair(space0, tag("(")),
+                        separated_list0(tag(","), delimited(space0, ident, space0)),
+                        tag(")"),
+                    ),
+                ),
+                preceded(space0, tag(":")),
+            ),
+        ),
+        |(name, args)| {
+            FuncOrInst::Function(Function {
+                name,
+                args,
+                instructions: Vec::new(),
+            })
+        },
+    )(input)
 }
 
 fn parse_instruction<'a>(
     line_number: usize,
-) -> impl FnMut(&'a str) -> IResult<&'a str, LabelOrInst> {
+) -> impl FnMut(&'a str) -> IResult<&'a str, FuncOrInst> {
     let cmd = command_format("cmd", (ls(expr_str),), |(cmd,)| {
         Instruction::RawCommand(cmd)
     });
@@ -97,13 +122,9 @@ fn parse_instruction<'a>(
         }
     });
 
-    let b = command_format("b", (ls(label),), |(label,)| Instruction::Branch(label));
+    let b = command_format("b", (ls(ident),), |(label,)| Instruction::Branch(label));
 
-    let bi = command_format("bi", (ls(label),), |(label,)| Instruction::BranchIf(label));
-
-    let bn = command_format("bn", (ls(label),), |(label,)| {
-        Instruction::BranchIfNot(label)
-    });
+    let bi = command_format("bi", (ls(ident),), |(label,)| Instruction::BranchIf(label));
 
     let calc = command_format("calc", (ls(calc_operator),), |(opr,)| {
         Instruction::Calculate(opr)
@@ -115,9 +136,13 @@ fn parse_instruction<'a>(
         |(dst, min, max)| Instruction::Random { dst, min, max },
     );
 
-    let call = command_format("call", (ls(parse_i32), ls(label)), |(offset_inc, label)| {
+    let yield_now = command_format("yield", (ls(tag("yield")),), |_| Instruction::Yield);
+
+    let call = command_format("call", (ls(parse_i32), ls(ident)), |(offset_inc, label)| {
         Instruction::Call { offset_inc, label }
     });
+
+    let ret = command_format("ret", (), |()| Instruction::Return);
 
     let debug = command_format("debug", (ls(expr_str),), move |(info,)| {
         Instruction::Debug {
@@ -131,11 +156,12 @@ fn parse_instruction<'a>(
     map(
         terminated(
             alt((
-                cmd, mov, set, load, store, cmp, cmpin, b, bi, bn, calc, rand, call, debug, log,
+                cmd, mov, set, load, store, cmp, cmpin, b, bi, calc, rand, yield_now, call, ret,
+                debug, log,
             )),
             comment,
         ),
-        LabelOrInst::Instruction,
+        FuncOrInst::Instruction,
     )
 }
 
@@ -159,7 +185,7 @@ where
     preceded(space1, parser)
 }
 
-fn label(input: &str) -> IResult<&str, &str> {
+fn ident(input: &str) -> IResult<&str, &str> {
     input.split_at_position1_complete(
         |c| !(c.is_alphanumeric() || c == '_'),
         ErrorKind::AlphaNumeric,

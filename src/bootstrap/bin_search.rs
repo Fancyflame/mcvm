@@ -1,12 +1,18 @@
 use std::{fs, path::Path};
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 
-use super::{MEM_POINTER, PREFIX};
+use super::PREFIX;
 
-pub fn gen_bin_search<F>(func_path: &Path, cmd_name: &str, size: u32, generate: F) -> Result<()>
+pub fn gen_bin_search<F>(
+    func_path: &Path,
+    cmd_name: &str,
+    pointer_reg: &str,
+    size: usize,
+    generate: F,
+) -> Result<()>
 where
-    F: Fn(u32) -> String,
+    F: Fn(usize) -> String,
 {
     let generate = |nth| {
         let s = generate(nth);
@@ -14,22 +20,13 @@ where
         s
     };
 
-    if !size.is_power_of_two() {
-        return Err(anyhow!("memory size must be power of 2"));
-    }
-
-    let dir = func_path.join(cmd_name);
-    if dir.exists() {
-        fs::remove_dir_all(&dir)?;
-    }
-    fs::create_dir(&dir)?;
+    clear_dir(func_path, cmd_name)?;
 
     for nth in 0..size {
-        bin_search(func_path, cmd_name, nth, &generate)?;
+        bin_search(func_path, cmd_name, pointer_reg, nth, &generate)?;
     }
 
-    let err_msg = "say mcvm fatal error: \
-    out of memory, please increase your memory size at compile time";
+    let err_msg = "say mcvm fatal error: pointer out of range";
 
     let entry = if size == 0 {
         err_msg.to_string()
@@ -37,13 +34,13 @@ where
         let entry_fn = if size == 1 {
             generate(0)
         } else {
-            bin_search_fn_name(&cmd_name, size >> 1)
+            format!("function {}", bin_search_fn_name(&cmd_name, size >> 1))
         };
 
         let upper_bound = size - 1;
         format!(
-            "execute if score {PREFIX} {MEM_POINTER} matches {size}.. run {err_msg}\n\
-            execute if score {PREFIX} {MEM_POINTER} matches ..{upper_bound} run function {entry_fn}"
+            "execute if score {PREFIX} {pointer_reg} matches {size}.. run {err_msg}\n\
+            execute if score {PREFIX} {pointer_reg} matches ..{upper_bound} run {entry_fn}"
         )
     };
 
@@ -51,13 +48,27 @@ where
     Ok(())
 }
 
-fn bin_search_fn_name(id: &str, nth: u32) -> String {
+fn clear_dir(func_path: &Path, cmd_name: &str) -> Result<()> {
+    let dir = func_path.join(cmd_name);
+    if dir.exists() {
+        fs::remove_dir_all(&dir)?;
+    }
+    Ok(fs::create_dir(&dir)?)
+}
+
+fn bin_search_fn_name(id: &str, nth: usize) -> String {
     format!("{id}/SearchPoint_N{nth}")
 }
 
-fn bin_search<F>(func_path: &Path, id: &str, nth: u32, generate: F) -> std::io::Result<()>
+fn bin_search<F>(
+    func_path: &Path,
+    id: &str,
+    pointer_reg: &str,
+    nth: usize,
+    generate: F,
+) -> std::io::Result<()>
 where
-    F: Fn(u32) -> String,
+    F: Fn(usize) -> String,
 {
     let zeros = nth.trailing_zeros();
 
@@ -69,11 +80,11 @@ where
         // nth: xxxx1
 
         // xxxx0
-        let lower = nth & u32::MAX << 1;
+        let lower = nth & usize::MAX << 1;
 
         format!(
-            "execute if score {PREFIX} {MEM_POINTER} matches {nth} run {}\n\
-            execute if score {PREFIX} {MEM_POINTER} matches {lower} run {}",
+            "execute if score {PREFIX} {pointer_reg} matches {nth} run {}\n\
+            execute if score {PREFIX} {pointer_reg} matches {lower} run {}",
             generate(nth),
             generate(lower)
         )
@@ -90,8 +101,8 @@ where
 
         format!(
             "\
-            execute if score {PREFIX} {MEM_POINTER} matches {nth}.. run function {}\n\
-            execute if score {PREFIX} {MEM_POINTER} matches ..{upper_bound} run function {}\
+            execute if score {PREFIX} {pointer_reg} matches {nth}.. run function {}\n\
+            execute if score {PREFIX} {pointer_reg} matches ..{upper_bound} run function {}\
         ",
             bin_search_fn_name(id, higher),
             bin_search_fn_name(id, lower)

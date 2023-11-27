@@ -26,7 +26,7 @@ fn main() -> Result<()> {
     }
     fs::create_dir(&function_dir)?;
 
-    let size: u32 = match env::var("MCVM_MEM_SIZE") {
+    let size: usize = match env::var("MCVM_MEM_SIZE") {
         Ok(s) => s.parse()?,
         Err(_) => 128,
     };

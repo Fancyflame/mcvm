@@ -5,7 +5,14 @@ mod parse;
 
 #[derive(Debug)]
 pub struct VirtualMachine<'a> {
-    blocks: HashMap<&'a str, Vec<Instruction<'a>>>,
+    blocks: HashMap<&'a str, Function<'a>>,
+}
+
+#[derive(Debug)]
+pub struct Function<'a> {
+    pub name: &'a str,
+    pub args: Vec<&'a str>,
+    pub instructions: Vec<Instruction<'a>>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -46,8 +53,6 @@ pub enum ExprCmpIn {
 #[derive(Clone, Copy, Debug)]
 pub enum Instruction<'a> {
     RawCommand(&'a str),
-    Debug { line: usize, info: &'a str },
-    Log(&'a str),
     Move { dst: Register, src: Register },
     Set { dst: Register, value: i32 },
     Load { addr: i32 },
@@ -56,8 +61,11 @@ pub enum Instruction<'a> {
     CompareIn { not: bool, opr: ExprCmpIn },
     Branch(&'a str),
     BranchIf(&'a str),
-    BranchIfNot(&'a str),
     Calculate(CalcOp),
     Random { dst: Register, min: i32, max: i32 },
+    Yield,
     Call { offset_inc: i32, label: &'a str },
+    Return,
+    Debug { line: usize, info: &'a str },
+    Log(&'a str),
 }

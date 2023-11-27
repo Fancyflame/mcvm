@@ -1,44 +1,40 @@
-use std::{fs, path::Path};
+use std::{borrow::Cow, path::Path};
 
 use anyhow::Result;
 
 use crate::{
     bootstrap::{
-        FUNC_LOAD, FUNC_STORE, MEM_OFFSET, MEM_POINTER, PREFIX, REG_R0, REG_R1, REG_R2, REG_R3,
+        FUNC_EXEC, FUNC_LOAD, FUNC_STORE, MEM_OFFSET, MEM_POINTER, PREFIX, PROGRAM_COUNTER, REG_R0,
+        REG_R1, REG_R2, REG_R3,
     },
     mas::{CalcOp, ExprCmpIn},
 };
 
+use self::ctx::Context;
+
 use super::{CmpOp, Instruction, Register, VirtualMachine};
+
+mod ctx;
 
 impl VirtualMachine<'_> {
     pub fn generate(&self, save_as: impl AsRef<Path>) -> Result<()> {
-        let mangler = mangle_label();
+        let mut ctx = Context::new();
 
-        for (label, instrustions) in &self.blocks {
-            let mut path = save_as.as_ref().join(mangler(label));
-            path.set_extension("mcfunction");
+        for label in self.blocks.keys() {
+            ctx.insert_label(*label, if *label == "main" { false } else { true });
+        }
 
-            let mut output = String::new();
-            for inst in instrustions {
-                translate(&mut output, &mangler, *inst)?;
+        for (label, function) in &self.blocks {
+            let mut label = Cow::Borrowed(*label);
+
+            for inst in &function.instructions {
+                if let Some(new_l) = translate(&label, &mut ctx, *inst)? {
+                    label = Cow::Owned(new_l);
+                }
             }
-
-            fs::write(path, output)?;
         }
 
-        Ok(())
-    }
-}
-
-fn mangle_label() -> impl Fn(&str) -> String {
-    let uuid = format!("{:x}", rand::random::<u64>());
-    move |label: &str| {
-        if label == "__main__" {
-            "main".to_string()
-        } else {
-            format!("{PREFIX}_{label}_mangled_{uuid}")
-        }
+        Ok(ctx.generate(save_as)?)
     }
 }
 
@@ -55,22 +51,36 @@ fn decode_string(input: &str) -> String {
     input.replace("\\", "")
 }
 
-fn translate<F>(buffer: &mut String, mangler: F, inst: Instruction) -> Result<()>
-where
-    F: Fn(&str) -> String,
-{
+// returns some means switch to a new label
+fn translate<'c>(label: &str, ctx: &'c mut Context, inst: Instruction) -> Result<Option<String>> {
+    let mut switch = None;
+
     let command = match inst {
-        Instruction::Branch(b) => format!("function {}", mangler(b)),
+        Instruction::Branch(b) => {
+            // let code generate to an unreachable block
+            switch = Some(ctx.new_anonymous_label());
 
-        Instruction::BranchIf(bi) => format!(
-            "execute unless score {PREFIX} {REG_R0} matches 0 run function {}\n",
-            mangler(bi)
-        ),
+            let label = ctx.get_label(b);
+            let b_id = label.id();
+            let b_fn = label.fn_name();
 
-        Instruction::BranchIfNot(bn) => format!(
-            "execute if score {PREFIX} {REG_R0} matches 0 run function {}\n",
-            mangler(bn)
-        ),
+            format!(
+                "scoreboard players set {PREFIX} {PROGRAM_COUNTER} {b_id}\n\
+                function {b_fn}\n"
+            )
+        }
+
+        Instruction::BranchIf(bi) => {
+            let an_label = switch.insert(ctx.new_anonymous_label());
+
+            let if_true_exec = ctx.get_label(bi).fn_name();
+            let if_false_exec = ctx.get_label(an_label).fn_name();
+
+            format!(
+                "execute unless score {PREFIX} {REG_R0} matches 0 run function {if_true_exec}\n\
+                execute if score {PREFIX} {REG_R0} matches 0 run function {if_false_exec}\n",
+            )
+        }
 
         Instruction::Calculate(opr) => {
             let opr_str = match opr {
@@ -86,12 +96,27 @@ where
             format!("scoreboard players operation {PREFIX} {REG_R0} {opr_str} {PREFIX} {REG_R1}\n")
         }
 
-        Instruction::Call { offset_inc, label } => {
-            let function = mangler(label);
+        Instruction::Call {
+            mut offset_inc,
+            label,
+        } => {
+            let ret_label = ctx.new_anonymous_label();
+            let ret_block = ctx.get_label(switch.insert(ret_label));
+            let this_id = ctx.get_label(label).id();
+            let ret_pc = offset_inc;
+            offset_inc += 1;
+
+            ret_block.push_str(format!(
+                "scoreboard players add {PREFIX} {MEM_OFFSET} -{offset_inc}\n"
+            ));
+
+            let function = ctx.get_label(label).fn_name();
             format!(
-                "scoreboard players add {PREFIX} {MEM_OFFSET} {offset_inc}\n\
-                function {function}\n\
-                scoreboard players add {PREFIX} {MEM_OFFSET} -{offset_inc}\n"
+                "scoreboard players set {PREFIX} {REG_R0} {this_id}\n\
+                scoreboard players set {PREFIX} {MEM_POINTER} {ret_pc}\n\
+                function {FUNC_STORE}\n\
+                scoreboard players add {PREFIX} {MEM_OFFSET} {offset_inc}\n\
+                function {function}\n",
             )
         }
 
@@ -144,11 +169,9 @@ where
 
         Instruction::Load { addr } => {
             format!(
-                "\
-                scoreboard players set {PREFIX} {MEM_POINTER} {addr}\n\
+                "scoreboard players set {PREFIX} {MEM_POINTER} {addr}\n\
                 scoreboard players operation {PREFIX} {MEM_POINTER} += {PREFIX} {MEM_OFFSET}\n\
-                function {FUNC_LOAD}\n\
-            "
+                function {FUNC_LOAD}\n"
             )
         }
 
@@ -178,6 +201,26 @@ where
             )
         }
 
+        Instruction::Yield => {
+            let an_label = ctx.new_anonymous_label();
+            let an_block = ctx.get_label(switch.insert(an_label));
+            format!(
+                "scoreboard players set {PREFIX} {PROGRAM_COUNTER} {}",
+                an_block.id()
+            )
+        }
+
+        Instruction::Return => {
+            switch = Some(ctx.new_anonymous_label());
+            format!(
+                "scoreboard players set {PREFIX} {MEM_POINTER} -1\n\
+                function {FUNC_LOAD}\n\
+                scoreboard players operation {PROGRAM_COUNTER} = {REG_R0}\n\
+                function {FUNC_EXEC}\n
+                "
+            )
+        }
+
         Instruction::Debug { line, info } => {
             format!("say (at: {line}) {}\n", decode_string(info))
         }
@@ -187,6 +230,6 @@ where
         }
     };
 
-    *buffer += &command;
-    Ok(())
+    ctx.get_label(label).push_str(&command);
+    Ok(switch)
 }
